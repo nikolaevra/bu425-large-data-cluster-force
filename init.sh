@@ -8,6 +8,6 @@ pip install --user jupyter
 
 virtualenv env
 source env/bin/activate
-pip install --upgrade pip 
-pip install requirements.txt
+pip3 install --upgrade pip 
+pip3 install requirements.txt
 
