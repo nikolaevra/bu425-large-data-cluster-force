@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 sudo apt install python-pip
 pip install --user virtualenv
 
