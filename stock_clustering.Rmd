@@ -1,0 +1,174 @@
+---
+title: "Stock Clustering Tutorial"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The Business Problem
+
+* We have been tasked to invest in a set of high tech firms
+* We woud like to diversify in a meaningful way but also be able to take advantage of recent analyst reports on the quality of high tech firms.
+* This makes it difficult to use standard portfolio optimization techniques
+* Clustering seems like a good way to do this!
+
+* You will need a bunch of packages to do this... install ones that are missing
+
+```{r}
+library(reshape2)
+library(cluster)
+library(dplyr)
+library(ggplot2)
+library(DataCombine)
+```
+
+## Data manipulation 
+
+```{r}
+ldta <- read.csv("stock_data.csv")
+summary(ldta)
+```
+
+```{r}
+ldta[1:6,]
+```
+
+* If we cluster based on the price what are we going to get?
+* From our point of view it would be better to cluster based on the monthly returns!
+* First we need a lagged variable
+* We will use the slide function from the DataCombine package
+```{r}
+ldta_lag <- slide(ldta,Var="PRC",TimeVar="date",GroupVar="tic",NewVar="PRC_lag",slideBy=-1)
+ldta_lag[1:6,]
+```
+* Now we construct the monthly returns
+```{r}
+ldta_lag$RTN <- (ldta_lag$PRC-ldta_lag$PRC_lag)/ldta_lag$PRC_lag
+ldta_lag[1:6,]
+```
+
+* To cluster we need to go from a long form dataset to a short form dataset 
+* Can use dcast from the reshape package
+
+```
+dcast(DATA, formula=ROW_VAR ~ COL_VAR, value.var="VAL_VAR",fun.aggregate=AGGR_FN)
+```
+
+* This function takes the dataset (DATA), a formula which describes the column used to define the rows (ROW_VAR) and the column used to determine the columns (COL_VAR) in the new wide dataset. You also need to specify a value column (VAL_VAR) to determine out what weight to put in the wide data entries.
+* fun.aggregate is applied when there are multiple entries for a data value in the new dataset.
+  * Example functions include sum or average
+
+* In this case we are interested in the clustering the tics based on the returns.
+* Because clustering algorithms have trouble with missing data we will replace NAs with a relatively neutral 0
+```{r}
+ldta$val <- 1
+wdta <- dcast(ldta_lag, formula=tic~date,value.var="RTN",fun.aggregate=sum)
+
+wdta1 <- wdta
+wdta1[is.na(wdta1)] <- 0
+rownames(wdta1) <- wdta1[,1]
+wdta1[,1] <- NULL
+```
+
+## Finding and evaluating clusterings
+
+* Begin with kmeans clustering
+```{r}
+cst <- kmeans(wdta1,6,nstart=5)
+print(cst)
+```
+
+```{r}
+cst$cluster[cst$cluster==1]
+cst$cluster[cst$cluster==2]
+cst$cluster[cst$cluster==3]
+cst$cluster[cst$cluster==4]
+cst$cluster[cst$cluster==5]
+cst$cluster[cst$cluster==6]
+```
+
+
+
+* rather than plotting all 97 dimensions lets use the first 2 principal components
+```{r}
+clusplot(wdta1,cst$cluster,color=TRUE)
+```
+
+* How should we handle this?
+* Alright these outliers are causing trouble lets get rid of them.
+```{r}
+wdta2 <- wdta1[!wdta$tic%in%c("DYN","PGN","SNS","AIG"),]
+cst <- kmeans(wdta2,6,nstart=5)
+print(cst$size)
+clusplot(wdta2,cst$cluster,color=TRUE)
+```
+
+
+
+```{r}
+cst <- kmeans(wdta2,20,iter.max=100,nstart=10)
+print(cst$size)
+```
+
+* These outliers are making a job a little bit hard to deal with by just removing them
+* So how many clusters?
+* Lets try my fancy clustering functions to find out if we have the right number of clusters?
+
+
+* Load the cluster_functions.R file which has a little helper for analyzing how many kmeans clusters
+```{r}
+source("cluster_functions.R")
+kmeans_perf2(wdta2,25,15)
+
+```
+
+* Hmm... conflicting signals. Silhouette points to fewer clusters R^2 to more.
+* Lets visualize the clustering with silhouette at a couple points
+
+```{r}
+cst4 <- kmeans(wdta2,4,iter.max=100,nstart=10)
+cst9 <- kmeans(wdta2,9,iter.max=100,nstart=10)
+cst4$size
+cst9$size
+```
+
+```{r}
+dissE <- daisy(wdta2)
+sk2 <- silhouette(cst4$cluster, dissE)
+sk3 <- silhouette(cst9$cluster, dissE)
+pdf('silhouette.pdf')
+plot(sk2)
+plot(sk3)
+dev.off()
+```
+
+## Examining the clusters
+
+* (They don't look very nice unless you export them to pdf!)
+* Lets examine the 3 largest clusters
+```{r}
+ord_clst <- sort(cst9$size,index.return = TRUE, decreasing=TRUE)$ix
+c1 <- ord_clst[1]
+c2 <- ord_clst[2]
+c3 <- ord_clst[3]
+
+par(mfrow=c(3,1))
+barplot(cst9$centers[c1,],main="cluster 1")
+barplot(cst9$centers[c2,],main="cluster 2")
+barplot(cst9$centers[c3,],main="cluster 3")
+barplot(cst9$centers[c1,]-cst$centers[c2,],main="cluster 1 vs 2")
+par(mfrow=c(1,1))
+```
+
+* So who are in these interesting clusters?
+
+```{r}
+print("cluster 1")
+wdta[cst9$cluster == c1,"tic"]
+print("cluster 2")
+wdta[cst9$cluster == c2,"tic"]
+print("cluster 3")
+wdta[cst9$cluster == c3,"tic"]
+```

@@ -1,0 +1,175 @@
+---
+title: "BigBasket Recommendation System"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Manipulating Data
+
+Because recommendation data is typically collected over time and there are many potential items it is more natural and takes
+less disk space if the datasets are saved as long datasets (few columns, many rows). 
+```{r}
+ldta <- read.csv("BigBasket.csv")
+ldta[1:6,]
+```
+
+* To build a recommendation system or virtually any other analysis, the data needs to be reshaped as a wide dataset which has a column for each of the items.
+* The reshape2 package is the most user friendly way to do this.
+```
+install.packages(reshape2)
+```
+
+```{r warning=FALSE}
+library(reshape2)
+```
+
+* In order to go from a long form dataset to a short form dataset use dcast
+```
+dcast(DATA, formula=ROW_VAR ~ COL_VAR, value.var="VAL_VAR",fun.aggregate=AGGR_FN)
+```
+
+* This function takes the dataset (DATA), a formula which describes the column used to define the rows (ROW_VAR) and the column used to determine the columns (COL_VAR) in the new wide dataset. You also need to specify a value column (VAL_VAR) to determine out what weight to put in the wide data entries.
+* fun.aggregate is applied when there are multiple entries for a data value in the new dataset.
+  * Example functions include sum or average
+  
+```{r}
+ldta$val <- 1
+wdta <- dcast(ldta, formula=Member~SKU,value.var="val",fun.aggregate=sum)
+```
+
+* The above command will put the sum of ldta$val for each SKU/member combination in the wdta entries
+* (to go from a wide dataset to a long dataset use melt function from reshape2)
+* This works fine if the dataset is not too large
+* If it is extremely large you should use a sparse matrix representation
+
+```{r}
+library(Matrix)
+ldta$Member <- as.factor(ldta$Member)
+ldta$SKU <- as.factor(ldta$SKU)
+sdta <- sparseMatrix(as.integer(ldta$Member), as.integer(ldta$SKU), x = ldta$val)
+rownames(sdta) = levels(ldta$Member)
+colnames(sdta) = levels(ldta$SKU)
+```
+
+* Are we happy with our wide datasets matrix 
+```{r}
+wdta[1:10,1:10]
+```
+
+* missing data is indistinguishable from a review of 0 
+  - when building a recommendation system we will want to predict missing data so lets use NA instead of 0
+* We want the dataset to be entirely numeric 
+  - remove the Member column and use that column as the row names 
+
+```{r}
+wdta[wdta==0] <- NA
+row.names(wdta) <- wdta$Member
+wdta$Member <- NULL
+wdta[1:10,1:10]
+```
+
+# Calculating similarity 
+
+* Now we can calculate similarity between individuals
+* Customized so that NA's are handled properly
+
+```{r}
+cosim <- function(x,y) {
+	x0 <- as.matrix(x)
+	y0 <- as.matrix(y)
+	x0[is.na(x0)]=0
+	y0[is.na(y0)]=0
+	
+	sim <- x0 %*% t(y0) / sqrt(x0%*%t(x0) * y0%*%t(y0))
+	
+	return(sim)
+}
+
+cosim(wdta[1,],wdta[8,])
+cosim(wdta[1,],wdta[10,])
+```
+
+# Building the recommender
+
+* To build the recommendation system use recommenderlab package
+
+```
+install.packages("recommenderlab")
+```
+
+* The proxy package is used by recommenderlab to calculate similarities (like cosine similarity)
+
+```{r warning=FALSE}
+library(recommenderlab)
+```
+
+* to build recommender 
+  - choose type of recommender - "UBCF" = user based collaborative filtering
+  - distance metric is cosine but can be changed
+  - scales the variables by default
+
+* data needs to be in the "realRatingMatrix" form
+```{r}
+mdta <- as(as.matrix(wdta),"realRatingMatrix")
+rec <- Recommender(mdta,method="UBCF")
+```
+
+* Note that to evaluate you should separate into test and training sets
+* make some recs
+
+```{r}
+recs <- predict(rec,mdta[1,],n=5)
+as(recs,"list")
+```
+
+# Operationalize the recommendation system
+
+* Define a simple function for doing recommendations
+
+```{r}
+make_recs <- function(recommender,indiv, num=5) {
+	recs <- predict(recommender,indiv,num)
+	return(as(recs,"list"))
+}
+
+make_recs(rec,mdta[3])
+```
+
+# Evaluating the recommendation system
+
+* As in other prediction tasks train on a training set and evaluate on a test set
+* We can do this easily using the evaluationScheme methods in recommenderlab
+  - Create test and training sets and determine which items to predict in the test set
+  - We will consider withholding all but 5 items (given=5)
+  - We will create a user and item based recommender
+
+```{r}
+e <- evaluationScheme(mdta, method="split", train=0.7, given=5)
+# user based
+Rubcf <- Recommender(getData(e, "train"), "UBCF")
+# item based
+Ribcf <- Recommender(getData(e, "train"), "IBCF")
+# make test data predictions
+p.ubcf <- predict(Rubcf, getData(e, "known"), type="ratings")
+p.ibcf <- predict(Ribcf, getData(e, "known"), type="ratings")
+# obtaining the error metrics for both approaches and comparing them
+e.ubcf<-calcPredictionAccuracy(p.ubcf, getData(e, "unknown"))
+e.ibcf<-calcPredictionAccuracy(p.ibcf, getData(e, "unknown"))
+e.ubcf
+e.ibcf
+```
+
+
+```{r}
+# make test data predictions
+p.ubcf <- predict(Rubcf, getData(e, "known"), type="topNList",goodRating=1,given=5)
+p.ibcf <- predict(Ribcf, getData(e, "known"), type="topNList",goodRating=1,given=5)
+# obtaining the error metrics for both approaches and comparing them
+e.ubcf<-calcPredictionAccuracy(p.ubcf, getData(e, "unknown"),goodRating=1,given=5)
+e.ibcf<-calcPredictionAccuracy(p.ibcf, getData(e, "unknown"),goodRating=1,given=5)
+e.ubcf
+e.ibcf
+```

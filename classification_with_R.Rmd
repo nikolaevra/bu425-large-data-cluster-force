@@ -1,0 +1,159 @@
+---
+title: "Pilgrim Bank B: Classification with R"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 0. Load data and define target (dependent) variable
+* Use pilgrim bank extended dataset
+* We are interested in whether the customer is retained 
+  + i.e. are they present in 2000
+  + Easily created with the true/false function is.na 
+``` {r}
+fit <- glm(y~X9Online, family="binomial", data=dta)
+summary(fit)
+## our coefficient is 0.16318, which is significant, shows a correlation. might be worried about things correlated with being
+## online and whether or not that corresponds with being online and also being retained. Thus, we should add an additional
+## set of variables that might control for those ommitted variables and gives us better parameters more reflective of the real 
+```
+
+```{r}
+dta <- read.csv("pilgrim_bank_data_ext.csv")
+dta$X9District <- as.factor(dta$X9District)
+dta$y <- !is.na(dta$X0Profit)
+```
+
+## 1. Generate a training and test set.
+
+* first calculate the sample size
+  + 75% of the rows in the data set
+  + nrow(dta) returns the number of rows in the 'data' data-frame
+```{r}
+smp_size <- floor(0.75 * nrow(dta))
+smp_size
+```
+
+* generate the indices for the training set
+  + note, 1:nrow(dta) gives a list of all indices e.g. [1,2,3,4..,nrow(dta)]
+```{r}
+train_ind <- sample(1:nrow(dta), size = smp_size)
+```
+
+* make the tranining and test sets by slicing the original data set
+```{r}
+train <- dta[train_ind, ]
+test <- dta[-train_ind, ]
+```
+
+## 2. Generate a classifier
+
+* Use logistical regression on training set to create a classification model
+* y~x1+x2+... is the regression formula exactly of the same form as for a linear regression
+* by setting dta=train we are using **only the training data** to build the classification model
+```{r}
+cls <- glm(y~X9Profit+X9Online+AgeImpt+IncImpt+AgeExists+X9District+X9Billpay, family='binomial',data=train)
+summary(cls)
+```
+
+##   3. Assess training error
+* Define the cut as the threshold where a glm probability prediction less than the cut is classified as a False (not retained) and a probability greater that the cut is classified as a True (Retained)
+```{r}
+cut=0.5
+```
+
+* Store the predicted classes in yhat
+* Calculate error by comparing the true values with classified values 
+```{r}
+yhat = (cls$fit>cut)
+tr.err = mean( train$y!=yhat ) 
+tr.err
+```
+
+##   4. Assess test error
+
+* We can similarly assess testing error but we need to use predict to determine the classified values for the test set
+* The predict function for a glm model requires specifying the type of prediction
+  + for a probability prediction use type="response"
+```{r}
+yhat = (predict(cls,test,type="response")>cut)
+te.err = mean( test$y!=yhat ) 
+te.err
+```
+
+**Here is what  yhat for the testing error looks like**
+```{r}
+summary(yhat)
+```
+There is a quiz on myls with probing questions about these results!
+
+##   5. How does misclassification depends on this threshold
+* I've written some functions to help evaluate classification error
+* They include calculations of the sensitivity, specificity, and classification rate
+* Read in the classification script (needs to be in the working directory)
+```{r}
+source("classification_functions.R")
+```
+
+* check different error on the training and testing data
+```{r}
+perf(cut,cls,train,train$y)
+```
+```{r}
+perf(cut,cls,test,test$y)
+```
+
+* Plot for different threshold values
+```{r}
+errs <- thresholds(cls,test,test$y)
+plot(errs$threshold,errs$prob_tn)
+```
+
+
+##    6. Other classifiers: Support Vector Machines
+* Must install the package from the cran repository
+```{r, eval=FALSE}
+install.packages("e1071")  
+```
+* load the package
+```{r, echo=FALSE}
+library(e1071)
+```
+* can also be installed in rstudio using the menu Tools/Install Packages...
+* build a model as with glm or lm
+  + But... y needs to be a factor for svm to do classification  (otherwise svm does regression)
+```{r, warning=FALSE}
+train$ySVM <- as.factor(train$y)
+test$ySVM <- as.factor(test$y)
+cls2 <- svm(ySVM~X9Profit+X9Online+AgeImpt+IncImpt+AgeExists+X9District+X9Billpay, data = train)
+yhat <- predict(cls2, test)
+mean( test$ySVM!=yhat )
+```
+##  7. Other classifiers: Tree Classifier
+* Tree classifiers are in the package rpart
+```{r, eval=FALSE}
+install.packages("rpart")  
+```
+
+* Build tree classifier
+  + I removed variables so that we could visualize it better
+```{r}
+library(rpart)
+cls3 <- rpart(y~X9Online+IncImpt+AgeExists+X9District+X9Billpay,method="class",data=train,cp=0.0025)
+printcp(cls3) # display the results
+```
+
+* Visualize the splits
+
+```{r}
+plot(cls3, uniform=TRUE,
+   main="Classification tree")
+text(cls3, use.n=TRUE, all=TRUE, cex=.8)
+```
+* Finally, how is it working?
+```{r}
+yhat <- predict(cls3,test,type="class")
+mean( test$y!=yhat )
+```
