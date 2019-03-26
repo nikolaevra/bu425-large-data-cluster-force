@@ -1,4 +1,7 @@
 env
 .idea
 
+# Folder to put actual data
 data/
+# Folder for virtual environment
+vv/
