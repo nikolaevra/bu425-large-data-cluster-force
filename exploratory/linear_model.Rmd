@@ -20,6 +20,10 @@ What's left to do:
   - Main points: Are there any statistically significant columns? Are there any highly correlated columns that we can remove to reduce complexity?
 
 ```{r}
+library(leaps)
+```
+
+```{r}
 data <- read.csv("../data/combined_sets/df_0.csv", header = TRUE)
 for (idx in c(1,2,3,4,5)){
   data <- rbind(data, read.csv(sprintf("../data/combined_sets/df_%s.csv", idx), header = TRUE))
@@ -34,15 +38,16 @@ fdata <- combined[!is.na(combined$target),]
 # Create categorial columns where appropriate
 fdata$feature_1 <- as.factor(fdata$feature_1)
 fdata$feature_2 <- as.factor(fdata$feature_2)
-fdata$feature_3 <- as.factor(fdata$feature_3)
+fdata$feature_3 <- as.factor(fdata$feature_3)regsubsets(Responsr_Var~. , data=" " , nbest=1)
 ```
 
 ```{r}
-# Start working here -  run a linear model (lm function, I think) to see if there is any connection between target variable and any of the other rows
-# Speak to Ruslan if you don't know what any of the columns mean
-
-# TODO: add more columns and experiment to see if we can make any statistically significant
-baseModel = lm(target ~ avg_purchase_amount+feature_1+feature_2+feature_3+avg_month_lag, data=fdata)
+baseModel = lm(target ~ feature_1+feature_2+feature_3, data=fdata)
 summary(baseModel)
 
+allStateModel = lm(target ~ state_id_16+state_id_9+state_id_15+state_id_18+state_id_2+state_id_7+state_id_11+state_id_3+state_id_5+state_id_19+state_id_17+state_id_24+state_id_21+state_id_23+state_id_20+state_id_4+state_id_22+state_id_8+state_id_14+state_id_13+state_id_1+state_id_10+state_id_12+state_id_6+state_id_16+state_id_9+state_id_15+state_id_18+state_id_2+state_id_7+state_id_11+state_id_3+state_id_5+state_id_19+state_id_17+state_id_24+state_id_21+state_id_23+state_id_20+state_id_4+state_id_22+state_id_8+state_id_14+state_id_13+state_id_1+state_id_10+state_id_12+state_id_6, data=fdata)
+summary(allStateModel)
+
+allPurchaseModel = lm(target ~ avg_month_lag+avg_installments+avg_days_between_purch+std_days_between_purch+num_authorized+authorized_unauthorized_ratio+avg_purchase_amount+std_purchase_amount+min_purchase_amount+max_purchase_amount+num_purchases+feature_1+feature_2+feature_3, data=fdata)
+summary(allPurchaseModel)
 ```
