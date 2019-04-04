@@ -1,0 +1,37 @@
+---
+title: "Elo linear analysis"
+output: html_notebook
+---
+
+What's left to do:
+
+- Pull latest project from the Github repository
+
+- Create a folder called "combined_sets" in the "data" of the project
+
+  - i.e. if you have the repository in a folder ~/ruslan/bu425-cluster/ then create a folder ~/ruslan/bu425-cluster/data/combined_sets/
+  
+- Download the datasets provided by Ruslan (https://drive.google.com/open?id=1CWd1yk89ibJcz4nhgj2Im97-crd_OmSw) - unzip the 6 datasets and put them in the combined_sets folder
+
+- See notes below in second R block
+
+- Add discussion to Google Drive 
+
+  - Main points: Are there any statistically significant columns? Are there any highly correlated columns that we can remove to reduce complexity?
+
+```{r}
+data <- read.csv("../data/combined_sets/df_0.csv", header = TRUE)
+for (idx in c(1,2,3,4,5)){
+  data <- rbind(data, read.csv(sprintf("../data/combined_sets/df_%s.csv", idx), header = TRUE))
+}
+
+train <- read.csv("../data/train.csv", header = TRUE)
+```
+
+
+```{r}
+combined <- merge(x=data, y=train, by="card_id", all=TRUE)
+
+# Start working here - filter out any rows where target variable is N/A and run a linear model (lm function, I think) to see if there is any connection between target variable and any of the other rows
+# Speak to Ruslan if you don't know what any of the columns mean
+```
