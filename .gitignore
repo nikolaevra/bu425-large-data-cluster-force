@@ -8,3 +8,4 @@ data/
 # Folder for virtual environment
 vv/
 env/
+venv/
