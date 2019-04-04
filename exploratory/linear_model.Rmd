@@ -26,12 +26,23 @@ for (idx in c(1,2,3,4,5)){
 }
 
 train <- read.csv("../data/train.csv", header = TRUE)
+
+combined <- merge(x=data, y=train, by="card_id", all=TRUE)
+# Filtered out any data that is NA
+fdata <- combined[!is.na(combined$target),]
+
+# Create categorial columns where appropriate
+fdata$feature_1 <- as.factor(fdata$feature_1)
+fdata$feature_2 <- as.factor(fdata$feature_2)
+fdata$feature_3 <- as.factor(fdata$feature_3)
 ```
 
-
 ```{r}
-combined <- merge(x=data, y=train, by="card_id", all=TRUE)
-
-# Start working here - filter out any rows where target variable is N/A and run a linear model (lm function, I think) to see if there is any connection between target variable and any of the other rows
+# Start working here -  run a linear model (lm function, I think) to see if there is any connection between target variable and any of the other rows
 # Speak to Ruslan if you don't know what any of the columns mean
+
+# TODO: add more columns and experiment to see if we can make any statistically significant
+baseModel = lm(target ~ avg_purchase_amount+feature_1+feature_2+feature_3+avg_month_lag, data=fdata)
+summary(baseModel)
+
 ```
